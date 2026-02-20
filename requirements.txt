@@ -1,0 +1,7 @@
+streamlit>=1.28
+graphviz
+pandas
+langgraph
+streamlit-flow-component
+streamlit-float
+pydantic
