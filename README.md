@@ -14,6 +14,10 @@ Este projeto implementa uma abordagem **neuro-simbólica**:
 
 Orquestração feita com **LangGraph** no modo IA.
 
+## Endpoint publico
+
+https://projeto-ia-gengitgitpush-uoriginmain-nzaixzgsavp5ddkoeaposn.streamlit.app/
+
 ## Principais funcionalidades
 
 - Chat lateral com histórico e resposta amigável.
