@@ -3,12 +3,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
-import os
 
 try:
     from dotenv import load_dotenv
 except Exception:  # pragma: no cover
     load_dotenv = None
+
+from sed.secrets import get_secret
 
 if load_dotenv:
     load_dotenv()
@@ -57,7 +58,7 @@ class OpenAIStrategy(LLMStrategy):
 
     def __init__(self, model: str = "gpt-4o-mini", api_key: str | None = None) -> None:
         self.model = model
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self.api_key = api_key or get_secret("OPENAI_API_KEY")
 
     def stream(self, prompt: str) -> Iterator[str]:
         try:
@@ -94,9 +95,9 @@ class GeminiStrategy(LLMStrategy):
 
     provider_name = "gemini"
 
-    def __init__(self, model: str = "gemini-1.5-flash", api_key: str | None = None) -> None:
+    def __init__(self, model: str = "gemini-2.5-flash", api_key: str | None = None) -> None:
         self.model = model
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        self.api_key = api_key or get_secret("GEMINI_API_KEY", "GOOGLE_API_KEY")
 
     def stream(self, prompt: str) -> Iterator[str]:
         try:
@@ -132,7 +133,7 @@ class GroqStrategy(LLMStrategy):
 
     def __init__(self, model: str = "llama-3.1-8b-instant", api_key: str | None = None) -> None:
         self.model = model
-        self.api_key = api_key or os.getenv("GROQ_API_KEY")
+        self.api_key = api_key or get_secret("GROQ_API_KEY")
 
     def _completion_params(self, prompt: str) -> dict:
         """Build Groq completion params with gpt-oss friendly defaults."""
