@@ -5,6 +5,14 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterator
 import os
 
+try:
+    from dotenv import load_dotenv
+except Exception:  # pragma: no cover
+    load_dotenv = None
+
+if load_dotenv:
+    load_dotenv()
+
 
 class LLMStrategy(ABC):
     """Contrato de providers LLM."""
@@ -111,8 +119,84 @@ class GeminiStrategy(LLMStrategy):
                 txt = getattr(chunk, "text", None)
                 if txt:
                     yield txt
+        except Exception as exc:
+            yield f"[Falha Gemini: {type(exc).__name__}: {exc}] "
+            yield "[Fallback local] "
+            yield from MockLLMStrategy().stream(prompt)
+
+
+class GroqStrategy(LLMStrategy):
+    """Provider Groq com fallback seguro quando SDK/API nao estiverem disponiveis."""
+
+    provider_name = "groq"
+
+    def __init__(self, model: str = "llama-3.1-8b-instant", api_key: str | None = None) -> None:
+        self.model = model
+        self.api_key = api_key or os.getenv("GROQ_API_KEY")
+
+    def _completion_params(self, prompt: str) -> dict:
+        """Build Groq completion params with gpt-oss friendly defaults."""
+        params = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": True,
+            "top_p": 1,
+        }
+        # Configuracao inspirada no exemplo oficial para openai/gpt-oss-*.
+        if str(self.model).startswith("openai/gpt-oss"):
+            params.update(
+                {
+                    "temperature": 1,
+                    "max_completion_tokens": 8192,
+                    "reasoning_effort": "medium",
+                    "stop": None,
+                }
+            )
+        else:
+            params.update({"temperature": 0.1})
+        return params
+
+    def stream(self, prompt: str) -> Iterator[str]:
+        try:
+            from groq import Groq  # type: ignore
+            use_native_sdk = True
         except Exception:
-            yield "[Falha Gemini, fallback local] "
+            use_native_sdk = False
+
+        if not self.api_key:
+            yield "[GROQ_API_KEY ausente] "
+            yield from MockLLMStrategy().stream(prompt)
+            return
+
+        if use_native_sdk:
+            try:
+                client = Groq(api_key=self.api_key)
+                stream = client.chat.completions.create(**self._completion_params(prompt))
+                for chunk in stream:
+                    delta = chunk.choices[0].delta.content if chunk.choices else None
+                    if delta:
+                        yield delta
+                return
+            except Exception:
+                # Continua para fallback OpenAI-compatible.
+                pass
+
+        try:
+            from openai import OpenAI  # type: ignore
+        except Exception:
+            yield "[Groq SDK e OpenAI SDK nao instaladas] "
+            yield from MockLLMStrategy().stream(prompt)
+            return
+
+        try:
+            client = OpenAI(api_key=self.api_key, base_url="https://api.groq.com/openai/v1")
+            stream = client.chat.completions.create(**self._completion_params(prompt))
+            for chunk in stream:
+                delta = chunk.choices[0].delta.content if chunk.choices else None
+                if delta:
+                    yield delta
+        except Exception:
+            yield "[Falha Groq, fallback local] "
             yield from MockLLMStrategy().stream(prompt)
 
 
@@ -126,6 +210,8 @@ class LLMFactory:
             return OpenAIStrategy(model=model or "gpt-4o-mini", api_key=api_key)
         if p == "gemini":
             return GeminiStrategy(model=model or "gemini-1.5-flash", api_key=api_key)
+        if p == "groq":
+            return GroqStrategy(model=model or "llama-3.1-8b-instant", api_key=api_key)
         return MockLLMStrategy()
 
 

@@ -1,136 +1,102 @@
-# Avaliação Intermediária - IA Generativa
+# SED Workspace - Abordagem Neuro-Simbólica com LangGraph
 
-Projeto individual para modelagem de Redes de Petri em Streamlit, com foco em interface, arquitetura e experiência de uso.
+Aplicação em Streamlit para modelagem de Redes de Petri com dois modos:
+- IA (pipeline neuro-simbólica)
+- Manual (modelagem simbólica direta)
 
-## Escopo desta entrega
+## Visão geral
 
-Esta versão segue a regra da avaliação intermediária:
-- sem integração de LLM real em produção;
-- foco total em funcionalidade da interface;
-- respostas do modo IA tratadas como mock/simulação de comportamento futuro.
+Este projeto implementa uma abordagem **neuro-simbólica**:
+1. O LLM interpreta texto livre do usuário.
+2. O LLM retorna um **JSON estruturado** da Rede de Petri.
+3. O backend valida esse JSON com **Pydantic**.
+4. O motor simbólico gera o DOT/diagrama a partir da estrutura validada.
 
-## Problema e solução proposta
+Orquestração feita com **LangGraph** no modo IA.
 
-### Problema
-Modelar sistemas de eventos discretos (SED) de forma visual e rápida, com dois fluxos:
-- fluxo assistido por texto (modo IA);
-- fluxo totalmente manual (modo simbólico).
+## Principais funcionalidades
 
-### Solução
-Aplicação Streamlit com:
-- painel lateral de controle;
-- canvas principal para renderização da Rede de Petri;
-- persistência de estado para evitar reset a cada interação.
+- Chat lateral com histórico e resposta amigável.
+- Classificação de intenção (saudação, curiosidade, piada, modelagem).
+- Geração de Rede de Petri por texto natural (IA).
+- Modo manual com:
+  - padrão fixo;
+  - personalizado (Pre/Post + tokens).
+- Configuração DOT:
+  - cor de fundo;
+  - cor de desenho;
+  - orientação horizontal/vertical.
+- Peso de arcos no JSON e no DOT:
+  - rótulo de peso aparece para peso > 1;
+  - espessura do arco cresce com o peso.
+- Download do grafo em PNG.
 
-## Complexidade do protótipo
+## Arquitetura
 
-O protótipo foi desenhado para ir além de um chat simples:
-- dois modos completos de operação (IA e Manual);
-- histórico de mensagens no modo IA;
-- configuração manual de lugares, transições, conexões pre/post e tokens;
-- configuração visual de cores do DOT (fundo e desenho);
-- exportação PNG do grafo;
-- preview adicional com componente de flow;
-- barra lateral com ações de sessão.
+### Entry point
+- `app.py`: inicialização da página e ciclo do connector.
 
-## Arquitetura e escolhas de design
+### Configuração
+- `src/app_config.py`: leitura de configurações da sidebar (cores e orientação DOT).
 
-### Stack
-- Streamlit (UI e estado reativo)
-- Graphviz (geração e visualização DOT)
-- streamlit-flow-component (preview tipo canvas)
-- streamlit-float (painel flutuante)
-- pydantic (tipagem para estruturas auxiliares)
+### UI e estado
+- `src/ui/petri_ui_connector.py`:
+  - controla a UI da sidebar/canvas;
+  - mantém `session_state` por workspace;
+  - integra chat + LangGraph + geração de DOT;
+  - renderiza grafo e exportação PNG.
 
-### Estrutura modular
-- `app.py`: entrypoint da aplicação.
-- `src/app_config.py`: configurações da sidebar e ciclo de vida do connector.
-- `src/ui/petri_ui_connector.py`: orquestração da UI, eventos e estado.
-- `sed/grafo.py`: construção das Redes de Petri (IA e manual).
-- `sed/ui_css.py`: tema e ajustes visuais.
+### Pipeline IA (LangGraph)
+- `src/langgraph_chat.py`:
+  - detecta intenção;
+  - executa fluxo de geração neuro-simbólica;
+  - retorna resposta amigável + DOT.
 
-### Estado persistente
-Uso de `st.session_state["petri_store"][workspace_id]` para manter:
-- modo atual;
-- histórico de chat;
-- DOT atual;
-- parâmetros manuais;
-- configuração de cores.
+### Núcleo neuro-simbólico
+- `src/neuro_symbolic.py`:
+  - prompt para JSON forçado;
+  - parser e validação Pydantic;
+  - fallback determinístico;
+  - resumo textual do modelo.
 
-Isso evita perda de dados durante reruns do Streamlit.
+### Motor de grafo
+- `sed/grafo.py`:
+  - constrói grafo via modo manual;
+  - constrói grafo a partir de JSON validado;
+  - aplica tema, orientação e pesos de arcos no DOT.
 
-## O que foi implementado corretamente
+### LLM Factory / Providers
+- `sed/llm_factory.py`:
+  - estratégias para OpenAI, Gemini e Groq;
+  - suporte a `.env`;
+  - fallback seguro quando SDK/chave não disponíveis.
 
-- alternância clara entre modo automático e manual;
-- modo manual com topologia fixa e topologia personalizada;
-- renderização consistente do grafo no canvas principal;
-- customização de cor aplicada em ambos os modos;
-- download do grafo em PNG com fallback;
-- organização da interface com barra lateral e canvas.
+## Fluxo do modo IA
 
-## O que funcionou bem no uso do agente de codificação
+1. Usuário envia mensagem no chat.
+2. LangGraph classifica intenção.
+3. Se for modelagem:
+   - gera JSON (LLM);
+   - valida schema;
+   - gera DOT via motor simbólico;
+   - renderiza no canvas.
+4. Se não for modelagem (ex.: saudação):
+   - responde no chat sem gerar grafo.
 
-- refatoração da aplicação para arquitetura modular;
-- resolução de problemas de `session_state` e rerender do Streamlit;
-- ajuste iterativo de UX (chat lateral, botões, modos, visibilidade condicional);
-- evolução do grafo (labels de lugares, tokens, estilos e tema).
+## Modelo JSON (resumo)
 
-Exemplos de direcionamentos que funcionaram:
-- "separe UI principal e estado em um connector";
-- "no modo manual, esconder itens de chat/sessão";
-- "manter grafo no canvas e evitar reset ao interagir".
-
-## O que não funcionou bem / limitações
-
-- conflito de estilos CSS em algumas iterações (layout alternando de forma inesperada);
-- comportamento de widget em Streamlit com erros de chave/instanciação;
-- dependência de ambiente para renderização Graphviz local;
-- necessidade de vários ajustes finos para UX do chat na sidebar.
-
-Como foi contornado:
-- centralização da lógica de estado no connector;
-- tratamento de fallback para renderização e exportação;
-- simplificação e estabilização de tema/CSS.
-
-## Observação importante sobre IA nesta etapa
-
-Mesmo existindo estrutura de cliente/factory no código para evolução futura, a avaliação intermediária considera apenas a interface e o fluxo mock.  
-Não há dependência obrigatória de API externa para demonstrar o protótipo.
-
-## Endpoint (preencher antes da entrega)
-
-- Endpoint público: `COLOCAR_LINK_AQUI`
-- Repositório GitHub: `COLOCAR_LINK_AQUI`
-
-## Como executar localmente
-
-1. Criar ambiente virtual:
-
-```bash
-python -m venv .venv
-```
-
-2. Ativar ambiente (PowerShell):
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-3. Instalar dependências:
-
-```bash
-pip install -r requirements.txt
-```
-
-4. Rodar aplicação:
-
-```bash
-streamlit run app.py
+```json
+{
+  "places": [{"id":"p1","label":"P1","tokens":0}],
+  "transitions": [{"id":"t1","label":"t1"}],
+  "arcs": [{"source":"p1","target":"t1","weight":1}],
+  "metadata": {"assumptions":[],"bounded":false}
+}
 ```
 
 ## Requisitos
 
-Dependências Python (`requirements.txt`):
+`requirements.txt`:
 - streamlit>=1.28
 - graphviz
 - pandas
@@ -138,9 +104,53 @@ Dependências Python (`requirements.txt`):
 - streamlit-flow-component
 - streamlit-float
 - pydantic
+- python-dotenv
+- google-generativeai
+- groq
+- openai
 
 Dependência de sistema (`packages.txt`):
 - graphviz
+
+## Variáveis de ambiente
+
+Criar `.env` (exemplo):
+
+```env
+GROQ_API_KEY="..."
+GOOGLE_API_KEY="..."
+OPENAI_API_KEY="..."
+```
+
+## Execução local
+
+```bash
+python -m venv .venv
+```
+
+PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Instalação:
+
+```bash
+pip install -r requirements.txt
+```
+
+Run:
+
+```bash
+streamlit run app.py
+```
+
+## Limitações atuais
+
+- Qualidade do JSON depende do modelo escolhido e da cota disponível.
+- Em falhas de SDK/cota/chave, o sistema usa fallback.
+- Ainda não há persistência em banco (estado é em `session_state`).
 
 ## Estrutura de pastas
 
@@ -157,6 +167,8 @@ Dependência de sistema (`packages.txt`):
 |  |- ui_css.py
 |- src/
    |- app_config.py
+   |- langgraph_chat.py
+   |- neuro_symbolic.py
    |- ui/
       |- petri_ui_connector.py
 ```

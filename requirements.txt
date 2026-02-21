@@ -5,3 +5,7 @@ langgraph
 streamlit-flow-component
 streamlit-float
 pydantic
+python-dotenv
+google-generativeai
+groq
+openai

@@ -8,28 +8,50 @@ import streamlit as st
 from src.ui.petri_ui_connector import PetriUIConnector
 
 
+def _theme_color_defaults() -> tuple[str, str]:
+    """Return default DOT colors based on current Streamlit theme."""
+    base = (st.get_option("theme.base") or "dark").strip().lower()
+    if base == "light":
+        return "#FFFFFF", "#000000"
+    return "#0e1117", "#FFFFFF"
+
+
 def build_sidebar_config(app_runtime_version: str) -> dict:
     """Monta configuracao da aplicacao a partir da sidebar."""
+    default_bg, default_fg = _theme_color_defaults()
+    orientation_options = {"Horizontal": "LR", "Vertical": "TB"}
+    current_rankdir = st.session_state.get("cfg_rankdir", "LR")
+    current_label = "Vertical" if current_rankdir == "TB" else "Horizontal"
+
     with st.sidebar:
-        with st.expander("Color Config", expanded=False):
+        with st.expander("Configuracao DOT", expanded=False):
             c_bg, c_fg = st.columns(2)
             with c_bg:
                 bg_color = st.color_picker(
                     "Fundo DOT",
-                    value=st.session_state.get("cfg_bg_color", "#000000"),
+                    value=st.session_state.get("cfg_bg_color", default_bg),
                     key="cfg_bg_color",
                 )
             with c_fg:
                 fg_color = st.color_picker(
                     "Desenho DOT",
-                    value=st.session_state.get("cfg_fg_color", "#ffffff"),
+                    value=st.session_state.get("cfg_fg_color", default_fg),
                     key="cfg_fg_color",
                 )
+            orientation = st.selectbox(
+                "Orientacao",
+                options=list(orientation_options.keys()),
+                index=list(orientation_options.keys()).index(current_label),
+                key="cfg_orientation_label",
+            )
+            rankdir = orientation_options.get(orientation, "LR")
+            st.session_state["cfg_rankdir"] = rankdir
 
     return {
         "graph_bg_color": bg_color,
         "graph_fg_color": fg_color,
-        "enable_flow_preview": True,
+        "graph_rankdir": rankdir,
+        "enable_flow_preview": False,
         "enable_float_panel": True,
         "app_runtime_version": app_runtime_version,
     }

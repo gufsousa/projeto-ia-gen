@@ -23,6 +23,84 @@ def _add_place(dot: graphviz.Digraph, node_id: str, place_name: str, tokens: int
     dot.node(node_id, _token_label(tokens), xlabel=place_name)
 
 
+def _transition_dimensions(rankdir: str) -> tuple[str, str]:
+    """Return transition rectangle dimensions based on graph orientation."""
+    r = (rankdir or "LR").upper()
+    if r in {"TB", "BT"}:
+        # Vertical flow: rotate transition bar to horizontal.
+        return "0.6", "0.06"
+    # Horizontal flow: keep transition bar vertical.
+    return "0.06", "0.6"
+
+
+def build_petri_net_from_spec(
+    spec: dict,
+    bg_color: str = "#000000",
+    fg_color: str = "#ffffff",
+    rankdir: str = "LR",
+) -> graphviz.Digraph:
+    """Build Petri net from structured spec JSON."""
+    dot = graphviz.Digraph()
+    _apply_theme(dot, bg_color=bg_color, fg_color=fg_color)
+    dot.attr(rankdir=rankdir)
+
+    places = spec.get("places", []) or []
+    transitions = spec.get("transitions", []) or []
+    arcs = spec.get("arcs", []) or []
+    trans_w, trans_h = _transition_dimensions(rankdir)
+
+    dot.attr(
+        "node",
+        shape="circle",
+        fixedsize="true",
+        width="0.42",
+        height="0.42",
+        color=fg_color,
+        fontcolor=fg_color,
+        fontsize="10",
+    )
+    for place in places:
+        place_id = str(place.get("id", "")).strip()
+        if not place_id:
+            continue
+        place_label = str(place.get("label") or place_id)
+        tokens = int(place.get("tokens", 0) or 0)
+        _add_place(dot, place_id, place_label, tokens=tokens)
+
+    dot.attr(
+        "node",
+        shape="box",
+        style="filled",
+        fillcolor=fg_color,
+        color=fg_color,
+        fontcolor=fg_color,
+        width=trans_w,
+        height=trans_h,
+        fixedsize="true",
+    )
+    for transition in transitions:
+        trans_id = str(transition.get("id", "")).strip()
+        if not trans_id:
+            continue
+        trans_label = str(transition.get("label") or trans_id)
+        dot.node(trans_id, "", xlabel=trans_label, labelangle="45", labeldistance="2")
+
+    for arc in arcs:
+        src = str(arc.get("source", "")).strip()
+        tgt = str(arc.get("target", "")).strip()
+        if src and tgt:
+            weight = int(arc.get("weight", 1) or 1)
+            penwidth = f"{1.2 + min(max(weight, 1), 6) * 0.35:.2f}"
+            attrs = {"penwidth": penwidth}
+            if weight > 1:
+                attrs["label"] = str(weight)
+                attrs["fontsize"] = "10"
+                attrs["fontcolor"] = fg_color
+            dot.edge(src, tgt, **attrs)
+
+    return dot
+
+
 def _tem_palavra(descricao: str, *palavras: str) -> bool:
     if not descricao:
         return False
@@ -30,11 +108,63 @@ def _tem_palavra(descricao: str, *palavras: str) -> bool:
     return any(p in d for p in palavras)
 
 
-def build_petri_net(descricao: str, bg_color: str = "#000000", fg_color: str = "#ffffff") -> graphviz.Digraph:
+def _build_queue_petri_net(
+    dot: graphviz.Digraph, fg_color: str, unbounded: bool, rankdir: str
+) -> graphviz.Digraph:
+    """Build a queue-focused Petri net (bounded or unbounded)."""
+    trans_w, trans_h = _transition_dimensions(rankdir)
+    dot.attr(
+        "node",
+        shape="circle",
+        fixedsize="true",
+        width="0.42",
+        height="0.42",
+        color=fg_color,
+        fontcolor=fg_color,
+        fontsize="10",
+    )
+    _add_place(dot, "alpha_src", "P_src", tokens=1)
+    _add_place(dot, "alpha_fila", "P_fila(inf)" if unbounded else "P_fila(k)", tokens=0)
+    _add_place(dot, "alpha_sink", "P_sink", tokens=0)
+
+    dot.attr(
+        "node",
+        shape="box",
+        style="filled",
+        fillcolor=fg_color,
+        color=fg_color,
+        fontcolor=fg_color,
+        width=trans_w,
+        height=trans_h,
+        fixedsize="true",
+    )
+    dot.node("t_chegada", "", xlabel="t_chegada", labelangle="45", labeldistance="2")
+    dot.node("t_servico", "", xlabel="t_servico", labelangle="45", labeldistance="2")
+
+    dot.edge("alpha_src", "t_chegada")
+    dot.edge("t_chegada", "alpha_fila")
+    dot.edge("alpha_fila", "t_servico")
+    dot.edge("t_servico", "alpha_sink")
+    return dot
+
+
+def build_petri_net(
+    descricao: str,
+    bg_color: str = "#000000",
+    fg_color: str = "#ffffff",
+    rankdir: str = "LR",
+) -> graphviz.Digraph:
     """Build Petri net in IA mode."""
     dot = graphviz.Digraph()
     _apply_theme(dot, bg_color=bg_color, fg_color=fg_color)
-    dot.attr(rankdir="LR")
+    dot.attr(rankdir=rankdir)
+
+    tem_fila = _tem_palavra(descricao, "fila", "queue")
+    tem_sem_limite = _tem_palavra(descricao, "sem limite", "ilimitad", "infinita", "infinito", "unbounded")
+    if tem_fila:
+        return _build_queue_petri_net(dot, fg_color=fg_color, unbounded=tem_sem_limite, rankdir=rankdir)
+
+    trans_w, trans_h = _transition_dimensions(rankdir)
 
     dot.attr(
         "node",
@@ -63,8 +193,8 @@ def build_petri_net(descricao: str, bg_color: str = "#000000", fg_color: str = "
         fillcolor=fg_color,
         color=fg_color,
         fontcolor=fg_color,
-        width="0.06",
-        height="0.6",
+        width=trans_w,
+        height=trans_h,
         fixedsize="true",
     )
     dot.node("t1", "", xlabel="t1", labelangle="45", labeldistance="2")
@@ -120,6 +250,7 @@ def build_petri_net_manual(
     n_transicoes: int,
     bg_color: str = "#000000",
     fg_color: str = "#ffffff",
+    rankdir: str = "LR",
 ) -> graphviz.Digraph:
     """Build Petri net in Manual mode as linear chain."""
     conexoes = []
@@ -134,6 +265,7 @@ def build_petri_net_manual(
         tokens_por_lugar=None,
         bg_color=bg_color,
         fg_color=fg_color,
+        rankdir=rankdir,
     )
 
 
@@ -144,11 +276,13 @@ def build_petri_net_manual_conexoes(
     tokens_por_lugar: dict[str, int] | None = None,
     bg_color: str = "#000000",
     fg_color: str = "#ffffff",
+    rankdir: str = "LR",
 ) -> graphviz.Digraph:
     """Build Petri net in Manual mode with custom Pre/Post mapping."""
     dot = graphviz.Digraph()
     _apply_theme(dot, bg_color=bg_color, fg_color=fg_color)
-    dot.attr(rankdir="LR")
+    dot.attr(rankdir=rankdir)
+    trans_w, trans_h = _transition_dimensions(rankdir)
 
     dot.attr(
         "node",
@@ -175,8 +309,8 @@ def build_petri_net_manual_conexoes(
         fillcolor=fg_color,
         color=fg_color,
         fontcolor=fg_color,
-        width="0.06",
-        height="0.6",
+        width=trans_w,
+        height=trans_h,
         fixedsize="true",
     )
     for i in range(1, n_transicoes + 1):
