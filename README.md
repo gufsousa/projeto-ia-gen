@@ -33,6 +33,63 @@ Orquestração feita com **LangGraph** no modo IA.
 
 ## Arquitetura
 
+### Diagrama (Mermaid)
+
+```mermaid
+graph LR
+    %% Entradas
+    subgraph "Interface Streamlit"
+        A[Chat do Usuario]
+        B[Configuracao DOT<br/>Cores + Orientacao]
+        C[Modo Manual<br/>Pre/Post + Tokens]
+    end
+
+    %% Orquestracao
+    subgraph "LangGraph Orchestrator"
+        D{Detector de Intencao}
+        E[Resposta Amigavel]
+    end
+
+    %% Motor Neuro-Simbolico
+    subgraph "Neuro-Symbolic Engine"
+        F[Prompt JSON Forcado]
+        G{LLM Provider<br/>Groq / Gemini / OpenAI}
+        H[Parser + Validacao Pydantic]
+        I[Fallback Simbolico]
+    end
+
+    %% Camada Simbolica
+    subgraph "Symbolic Petri Layer"
+        J[JSON Petri<br/>places transitions arcs weight]
+        K[DOT Builder<br/>sed/grafo.py]
+        L[Graphviz Canvas + PNG]
+    end
+
+    %% Fluxo IA
+    A --> D
+    D -->|saudacao/piada| E
+    D -->|modelagem| F
+    F --> G
+    G --> H
+    H -->|valido| J
+    H -->|invalido| I
+    I --> J
+    J --> K
+    B --> K
+    K --> L
+
+    %% Fluxo Manual
+    C --> K
+
+    %% Saidas auxiliares
+    J --> M[JSON Validado no Debug]
+
+    %% Estilos
+    style G fill:#4285f4,color:#fff,stroke:#000
+    style H fill:#007f00,color:#fff,stroke:#000
+    style K fill:#f39c12,color:#fff,stroke:#000
+```
+
 ### Entry point
 - `app.py`: inicialização da página e ciclo do connector.
 
