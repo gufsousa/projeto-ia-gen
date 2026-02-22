@@ -1,60 +1,56 @@
-# SED Workspace - Abordagem Neuro-Simbólica com LangGraph
+# SED Workspace - Neuro-Simbolico com LangGraph
 
-Aplicação em Streamlit para modelagem de Redes de Petri com dois modos:
-- IA (pipeline neuro-simbólica)
-- Manual (modelagem simbólica direta)
-
-## Visão geral
-
-Este projeto implementa uma abordagem **neuro-simbólica**:
-1. O LLM interpreta texto livre do usuário.
-2. O LLM retorna um **JSON estruturado** da Rede de Petri.
-3. O backend valida esse JSON com **Pydantic**.
-4. O motor simbólico gera o DOT/diagrama a partir da estrutura validada.
-
-Orquestração feita com **LangGraph** no modo IA.
+Aplicacao em Streamlit para modelagem de Redes de Petri com dois modos:
+- IA (pipeline neuro-simbolico)
+- Manual (modelagem simbolica direta)
 
 ## Endpoint publico
 
 https://projeto-ia-gengitgitpush-uoriginmain-nzaixzgsavp5ddkoeaposn.streamlit.app/
 
-## Principais funcionalidades
+## Problema e solucao
 
-- Chat lateral com histórico e resposta amigável.
-- Classificação de intenção (saudação, curiosidade, piada, modelagem).
-- Geração de Rede de Petri por texto natural (IA).
-- Modo manual com:
-  - padrão fixo;
-  - personalizado (Pre/Post + tokens).
-- Configuração DOT:
-  - cor de fundo;
-  - cor de desenho;
-  - orientação horizontal/vertical.
-- Peso de arcos no JSON e no DOT:
-  - rótulo de peso aparece para peso > 1;
-  - espessura do arco cresce com o peso.
-- Download do grafo em PNG.
+O projeto resolve a modelagem de sistemas de eventos discretos a partir de texto natural, com saida formal em Rede de Petri.
 
-## Arquitetura
+Abordagem usada:
+1. LLM interpreta o texto.
+2. LLM retorna JSON estruturado da rede.
+3. JSON e validado com Pydantic.
+4. Camada simbolica gera DOT.
+5. Graphviz renderiza o diagrama no canvas.
 
-### Diagrama (Mermaid)
+## Funcionalidades principais
+
+- Chat lateral com historico e resposta amigavel.
+- Classificacao de intencao (saudacao, piada, modelagem).
+- Geracao IA via LangGraph + fluxo neuro-simbolico.
+- Modo manual:
+  - Padrao fixo.
+  - Personalizado (Pre/Post + tokens).
+- Configuracao DOT:
+  - fundo;
+  - desenho;
+  - orientacao horizontal/vertical.
+- Peso de arcos:
+  - no JSON (`weight`);
+  - no DOT (label para peso > 1 e espessura proporcional).
+- Download PNG do grafo.
+
+## Arquitetura (Mermaid)
 
 ```mermaid
 graph LR
-    %% Entradas
     subgraph "Interface Streamlit"
         A[Chat do Usuario]
         B[Configuracao DOT<br/>Cores + Orientacao]
         C[Modo Manual<br/>Pre/Post + Tokens]
     end
 
-    %% Orquestracao
     subgraph "LangGraph Orchestrator"
         D{Detector de Intencao}
         E[Resposta Amigavel]
     end
 
-    %% Motor Neuro-Simbolico
     subgraph "Neuro-Symbolic Engine"
         F[Prompt JSON Forcado]
         G{LLM Provider<br/>Groq / Gemini / OpenAI}
@@ -62,14 +58,12 @@ graph LR
         I[Fallback Simbolico]
     end
 
-    %% Camada Simbolica
     subgraph "Symbolic Petri Layer"
         J[JSON Petri<br/>places transitions arcs weight]
         K[DOT Builder<br/>sed/grafo.py]
         L[Graphviz Canvas + PNG]
     end
 
-    %% Fluxo IA
     A --> D
     D -->|saudacao/piada| E
     D -->|modelagem| F
@@ -80,84 +74,126 @@ graph LR
     I --> J
     J --> K
     B --> K
-    K --> L
-
-    %% Fluxo Manual
     C --> K
-
-    %% Saidas auxiliares
-    J --> M[JSON Validado no Debug]
-
-    %% Estilos
-    style G fill:#4285f4,color:#fff,stroke:#000
-    style H fill:#007f00,color:#fff,stroke:#000
-    style K fill:#f39c12,color:#fff,stroke:#000
+    K --> L
+    J --> M[JSON validado no debug]
 ```
 
-### Entry point
-- `app.py`: inicialização da página e ciclo do connector.
+## Componentes
 
-### Configuração
-- `src/app_config.py`: leitura de configurações da sidebar (cores e orientação DOT).
+- `app.py`: entrypoint Streamlit.
+- `src/app_config.py`: config da sidebar (DOT/theme).
+- `src/ui/petri_ui_connector.py`: UI, estado, chat, render e exportacao.
+- `src/langgraph_chat.py`: orquestracao com LangGraph.
+- `src/neuro_symbolic.py`: prompt JSON, parse e validacao Pydantic.
+- `sed/grafo.py`: geracao DOT (manual + JSON validado).
+- `sed/llm_factory.py`: providers e fallback de LLM.
+- `sed/secrets.py`: leitura unificada local/nuvem (`st.secrets` + env).
 
-### UI e estado
-- `src/ui/petri_ui_connector.py`:
-  - controla a UI da sidebar/canvas;
-  - mantém `session_state` por workspace;
-  - integra chat + LangGraph + geração de DOT;
-  - renderiza grafo e exportação PNG.
+## Fluxo IA
 
-### Pipeline IA (LangGraph)
-- `src/langgraph_chat.py`:
-  - detecta intenção;
-  - executa fluxo de geração neuro-simbólica;
-  - retorna resposta amigável + DOT.
-
-### Núcleo neuro-simbólico
-- `src/neuro_symbolic.py`:
-  - prompt para JSON forçado;
-  - parser e validação Pydantic;
-  - fallback determinístico;
-  - resumo textual do modelo.
-
-### Motor de grafo
-- `sed/grafo.py`:
-  - constrói grafo via modo manual;
-  - constrói grafo a partir de JSON validado;
-  - aplica tema, orientação e pesos de arcos no DOT.
-
-### LLM Factory / Providers
-- `sed/llm_factory.py`:
-  - estratégias para OpenAI, Gemini e Groq;
-  - suporte a `.env`;
-  - fallback seguro quando SDK/chave não disponíveis.
-
-## Fluxo do modo IA
-
-1. Usuário envia mensagem no chat.
-2. LangGraph classifica intenção.
-3. Se for modelagem:
-   - gera JSON (LLM);
+1. Usuario envia mensagem no chat.
+2. LangGraph detecta intencao.
+3. Em modelagem:
+   - gera JSON no LLM;
    - valida schema;
-   - gera DOT via motor simbólico;
-   - renderiza no canvas.
-4. Se não for modelagem (ex.: saudação):
+   - aplica fallback se necessario;
+   - gera DOT e renderiza.
+4. Em saudacao/piada:
    - responde no chat sem gerar grafo.
 
-## Modelo JSON (resumo)
+## Exemplo de JSON
 
 ```json
 {
-  "places": [{"id":"p1","label":"P1","tokens":0}],
-  "transitions": [{"id":"t1","label":"t1"}],
-  "arcs": [{"source":"p1","target":"t1","weight":1}],
-  "metadata": {"assumptions":[],"bounded":false}
+  "places": [{"id": "p1", "label": "P1", "tokens": 0}],
+  "transitions": [{"id": "t1", "label": "t1"}],
+  "arcs": [{"source": "p1", "target": "t1", "weight": 1}],
+  "metadata": {"assumptions": [], "bounded": false}
 }
+```
+
+## Evidencias de uso de agente de codificacao
+
+- Desenvolvimento iterativo com agente para:
+  - refatoracao da arquitetura;
+  - resolucao de erros de estado (`session_state`);
+  - ajustes de UX no chat/sidebar/canvas;
+  - implementacao do fluxo neuro-simbolico com LangGraph.
+- O agente foi usado para:
+  - criar e alterar modulos (`langgraph_chat.py`, `neuro_symbolic.py`, `secrets.py`);
+  - evoluir schema JSON com pesos de arco;
+  - integrar providers e fallback local/nuvem.
+
+## Evidencia de engenharia de prompt
+
+Este projeto nao usa prompt generico de chatbot. O prompt principal foi desenhado para forcar saida estruturada e compor um fluxo agentic:
+
+- papel do modelo:
+  - "compilador neuro-simbolico para Rede de Petri";
+- formato de saida:
+  - JSON valido e somente JSON (sem markdown);
+- schema imposto:
+  - `places`, `transitions`, `arcs` (com `weight`) e `metadata`;
+- regras formais:
+  - ids unicos;
+  - arcos apenas entre lugar e transicao;
+  - `tokens >= 0` e `weight >= 1`.
+
+Resultado: o LLM nao responde "livre". Ele gera estrutura formal validavel, que alimenta a ferramenta grafica (DOT/Graphviz). Isso caracteriza agente orientado a tarefa, e nao plug-and-play de conversa.
+
+## O que funcionou
+
+- Pipeline neuro-simbolico ficou consistente: texto -> JSON -> validacao -> DOT.
+- Modelo manual e IA convivem bem no mesmo workspace.
+- Config DOT (cor/orientacao) aplicada em tempo real.
+- Exportacao PNG funcional com fallback.
+
+## O que deu errado e como foi corrigido
+
+- Erros de `session_state` e update de widgets no Streamlit:
+  - corrigidos com inicializacao centralizada no connector.
+- Quotas/SDK de LLM (Gemini/Groq):
+  - adicionados fallbacks e mensagens de diagnostico.
+- HTML do chat renderizado como texto:
+  - corrigido ajustando montagem do markdown/HTML.
+- Mudancas de orientacao sem rotacionar transicao:
+  - corrigido com retheme de `rankdir` + dimensoes de `shape=box`.
+
+## Aplicacao em documentacao tecnica e academica
+
+Esta arquitetura foi pensada para acelerar documentacao formal, nao apenas para interface visual.
+
+Pontos de valor:
+- geracao rapida de diagramas formais para trabalhos academicos;
+- apoio a relatorios tecnicos com rastreabilidade (texto -> JSON -> DOT);
+- padronizacao de modelos reutilizaveis entre projetos;
+- integracao natural com ecossistema de documentacao (Markdown, LaTeX, PDF, SVG/PNG);
+- reducao de trabalho manual em ferramentas puramente graficas.
+
+Diferencial da escolha de motor:
+- `Graphviz` atua como camada de baixo nivel e representacao formal;
+- o diagrama deixa de ser apenas desenho e passa a ser artefato versionavel;
+- facilita escalar para novos formatos (fluxograma, templates setoriais e bibliotecas de modelos).
+
+## Configuracao de secrets (local e nuvem)
+
+Local (`.env`):
+```env
+GROQ_API_KEY="..."
+GOOGLE_API_KEY="..."
+OPENAI_API_KEY="..."
+```
+
+Nuvem (Streamlit Cloud > Secrets):
+```toml
+GROQ_API_KEY="..."
+GOOGLE_API_KEY="..."
+OPENAI_API_KEY="..."
 ```
 
 ## Requisitos
 
-`requirements.txt`:
 - streamlit>=1.28
 - graphviz
 - pandas
@@ -170,48 +206,29 @@ graph LR
 - groq
 - openai
 
-Dependência de sistema (`packages.txt`):
+`packages.txt`:
 - graphviz
 
-## Variáveis de ambiente
-
-Criar `.env` (exemplo):
-
-```env
-GROQ_API_KEY="..."
-GOOGLE_API_KEY="..."
-OPENAI_API_KEY="..."
-```
-
-## Execução local
+## Executar localmente
 
 ```bash
 python -m venv .venv
 ```
 
 PowerShell:
-
 ```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-Instalação:
-
+Instalar dependencias:
 ```bash
 pip install -r requirements.txt
 ```
 
-Run:
-
+Rodar:
 ```bash
 streamlit run app.py
 ```
-
-## Limitações atuais
-
-- Qualidade do JSON depende do modelo escolhido e da cota disponível.
-- Em falhas de SDK/cota/chave, o sistema usa fallback.
-- Ainda não há persistência em banco (estado é em `session_state`).
 
 ## Estrutura de pastas
 
@@ -224,6 +241,7 @@ streamlit run app.py
 |- sed/
 |  |- grafo.py
 |  |- llm_factory.py
+|  |- secrets.py
 |  |- tags.py
 |  |- ui_css.py
 |- src/
