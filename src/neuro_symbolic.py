@@ -73,16 +73,15 @@ class PetriNetSpec(BaseModel):
     @classmethod
     def _ensure_transitions(cls, transitions: list[TransitionSpec]) -> list[TransitionSpec]:
         if not transitions:
-            raise ValueError("transitions must not be empty")
+            raise ValueError("A rede deve ter pelo menos uma transicao")
         return transitions
 
     @field_validator("arcs")
     @classmethod
     def _ensure_arcs(cls, arcs: list[ArcSpec]) -> list[ArcSpec]:
         if not arcs:
-            raise ValueError("arcs must not be empty")
+            raise ValueError("A rede deve ter pelo menos um arco conectado")
         return arcs
-
 
 def petri_json_prompt(user_text: str) -> str:
     """Instruction prompt to force JSON output from external file."""
@@ -133,6 +132,9 @@ def parse_and_validate_petri_spec(raw_text: str) -> tuple[dict[str, Any] | None,
         spec = PetriNetSpec.model_validate(payload)
     except ValidationError as exc:
         return None, f"schema validation error: {exc}"
+
+    if spec.metadata and spec.metadata.get("error"):
+        return None, f"LLM restrição formal de segurança: {spec.metadata.get('error')}"
 
     return spec.model_dump(), None
 

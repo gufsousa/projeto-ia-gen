@@ -46,6 +46,15 @@ def _detect_intent(state: ChatState) -> ChatState:
         "e aí",
         "opa",
     }
+    is_question = any(
+        k in text
+        for k in [
+            "quem", "o que e", "o que é", "inventor", "fale sobre", "expliqu",
+            "como funcion", "historia", "história", "criou", "desenvolveu",
+            "qual a", "qual o",
+        ]
+    )
+
     has_modeling_signal = any(
         k in text
         for k in [
@@ -73,7 +82,7 @@ def _detect_intent(state: ChatState) -> ChatState:
     )
     if is_joke:
         state["intent"] = "joke"
-    elif is_greeting or not has_modeling_signal:
+    elif is_question or is_greeting or not has_modeling_signal:
         state["intent"] = "chat"
     else:
         state["intent"] = "petri"
@@ -122,8 +131,11 @@ def _build_assistant_reply(state: ChatState) -> ChatState:
         user_text = state.get("user_text", "")
         client = state.get("llm_client")
         chat_prompt = (
-            "Responda em pt-BR de forma amigavel e curta (maximo 2 frases) a pergunta abaixo. "
-            "Se for apenas saudacao, cumprimente e diga que pode ajudar. Pergunta: "
+            "Você é um assistente especialista em Redes de Petri e Sistemas de Eventos Discretos. "
+            "Responda em pt-BR de forma clara e amigável à pergunta ou solicitação abaixo. "
+            "Se for apenas saudação, cumprimente e diga que pode ajudar a modelar ou tirar dúvidas. "
+            "Se for uma requisição sobre conhecimentos gerais, explique de forma didática (máximo 4 frases). "
+            "Pergunta do usuário: "
             + user_text
         )
         partial = client.complete_text(chat_prompt).strip() if client else ""
@@ -131,7 +143,7 @@ def _build_assistant_reply(state: ChatState) -> ChatState:
             partial = "Entendi! Posso te ajudar com isso."
         state["assistant_text"] = (
             partial
-            + "\n\nPosso ajudar voce com mais alguma funcionalidade para a Rede de Petri?"
+            + "\n\nSe quiser, eu posso modelar uma Rede de Petri para você. É só pedir!"
         )
         return state
 
