@@ -525,13 +525,13 @@ class PetriUIConnector:
             if modo_ia:
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
-                    if st.button("New Chat", use_container_width=True):
+                    if st.button("New Chat", width="stretch"):
                         self.new_thread()
                 with col_btn2:
-                    if st.button("Clear Graph", use_container_width=True):
+                    if st.button("Clear Graph", width="stretch"):
                         self.clear_graph()
             else:
-                if st.button("Clear Graph", use_container_width=True):
+                if st.button("Clear Graph", width="stretch"):
                     self.clear_graph()
 
             if modo_ia:
@@ -608,7 +608,7 @@ class PetriUIConnector:
                         label_visibility="collapsed"
                     )
                 with row_btn:
-                    send_chat = st.button("↑", use_container_width=True, key="btn_side_send")
+                    send_chat = st.button("↑", width="stretch", key="btn_side_send")
                 ws["llm_model"] = model
 
                 if send_chat and chat_prompt.strip():
@@ -651,7 +651,7 @@ class PetriUIConnector:
 
                 if modo_manual == "Padrão Fixo":
                     st.caption("Topologia padrão fixa: 3 lugares e 2 transições em cadeia.")
-                    if st.button("Gerar Manual", use_container_width=True, key="btn_manual_fixed"):
+                    if st.button("Gerar Manual", width="stretch", key="btn_manual_fixed"):
                         dot = build_petri_net_manual(
                             3,
                             2,
@@ -731,7 +731,7 @@ class PetriUIConnector:
                             )
                             ws["manual"]["tokens"][place_id] = tokens
 
-                if st.button("Gerar Manual", use_container_width=True, key="btn_manual_custom"):
+                if st.button("Gerar Manual", width="stretch", key="btn_manual_custom"):
                     dot = build_petri_net_manual_conexoes(
                         n_lugares,
                         n_transicoes,
@@ -796,7 +796,7 @@ class PetriUIConnector:
                         dot_to_render = self._scaled_dot_source(
                             ws["dot_source"], float(ws.get("diagram_scale", 3.0))
                         )
-                        st.graphviz_chart(dot_to_render, use_container_width=False)
+                        st.graphviz_chart(dot_to_render, use_container_width=False) # graphviz chart doesn't support width yet
                     except Exception:
                         st.error("Graphviz nao disponivel no ambiente. Exibindo DOT.")
                         st.code(ws["dot_source"], language="dot")

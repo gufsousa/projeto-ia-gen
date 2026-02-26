@@ -85,17 +85,21 @@ class PetriNetSpec(BaseModel):
 
 
 def petri_json_prompt(user_text: str) -> str:
-    """Instruction prompt to force JSON output."""
-    return (
-        "Voce e um compilador neuro-simbolico para Rede de Petri. "
-        "Converta o texto do usuario para JSON VALIDO e SOMENTE JSON (sem markdown, sem comentarios). "
-        "Use exatamente este schema: "
-        '{"places":[{"id":"p1","label":"P1","tokens":0}],"transitions":[{"id":"t1","label":"t1"}],'
-        '"arcs":[{"source":"p1","target":"t1","weight":1}],"metadata":{"assumptions":[],"bounded":false}} '
-        "Regras: ids unicos; arcos so entre lugar<->transicao; tokens inteiro >= 0; weight inteiro >= 1. "
-        "Texto do usuario: "
-        + user_text
-    )
+    """Instruction prompt to force JSON output from external file."""
+    import os
+    prompt_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "prompts", "system_prompt.txt")
+    try:
+        with open(prompt_path, "r", encoding="utf-8") as f:
+            template = f.read()
+            return template.replace("{{USER_TEXT}}", user_text)
+    except FileNotFoundError:
+        # Fallback inline if file is missing
+        return (
+            "Voce e um compilador neuro-simbolico para Rede de Petri. "
+            "Converta o texto do usuario para JSON VALIDO e SOMENTE JSON "
+            "(sem markdown, sem comentarios). "
+            f"Texto do usuario: {user_text}"
+        )
 
 
 def _extract_json_candidate(raw_text: str) -> str:
