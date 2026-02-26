@@ -1,0 +1,11 @@
+[theme]
+base = "dark"
+primaryColor = "#ff4b4b"
+
+[client]
+# Isso remove o menu de 'Settings' e 'Theme' para o usuário final
+toolbarMode = "minimal"
+
+[ui]
+# Esconde o botão de 'Deploy' e o menu de opções (os três pontos)
+hideTopBar = true

@@ -2,6 +2,27 @@
 from __future__ import annotations
 
 import streamlit as st
+from PIL import Image
+
+# 1. SETUP DA PÁGINA (Deve ser o primeiro comando)
+try:
+    # Use o logo1.jpg (quadrado) para o ícone da aba do navegador
+    img_icone = Image.open("assets/icone.png") 
+    st.set_page_config(
+        page_title="SED Workspace", 
+        page_icon=img_icone, 
+        layout="wide"
+    )
+except Exception:
+    st.set_page_config(page_title="SED Workspace", page_icon="⚙️", layout="wide")
+
+# 2. LOGO RETANGULAR (7x4) NA SIDEBAR
+# O parâmetro 'icon_image' aparece quando a barra lateral está recolhida
+# Logo Menu
+try:
+    st.logo("assets/logo_horizontal_1.png")
+except:
+    pass
 
 from src.app_config import (
     build_sidebar_config,

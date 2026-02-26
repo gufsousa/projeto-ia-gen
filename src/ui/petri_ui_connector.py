@@ -6,6 +6,7 @@ import re
 import time
 import urllib.parse
 import urllib.request
+import base64  # Adicionado para conversão de imagem
 
 import graphviz
 from pydantic import BaseModel
@@ -62,6 +63,14 @@ class PetriUIConnector:
         if float_init:
             float_init(theme=False)
 
+    def _img_to_base64(self, image_path: str) -> str | None:
+        """Converte imagem local para string base64 para uso em HTML."""
+        try:
+            with open(image_path, "rb") as img_file:
+                return f"data:image/png;base64,{base64.b64encode(img_file.read()).decode()}"
+        except Exception:
+            return None
+
     def _init_session_state(self) -> None:
         if "workspace_id" not in st.session_state:
             st.session_state["workspace_id"] = "default"
@@ -74,10 +83,10 @@ class PetriUIConnector:
                 "modo_ia": True,
                 "dot_source": "",
                 "ultima_geracao": "Nenhuma",
-                "graph_bg_color": "#000000",
+                "graph_bg_color": "#0e1117",
                 "graph_fg_color": "#ffffff",
                 "graph_rankdir": "LR",
-                "diagram_scale": 1.35,
+                "diagram_scale": 3.0,  # Padrão inicial de 300%
                 "diagram_box_height": 640,
                 "llm_model": "",
                 "llm_last_output": "",
@@ -96,10 +105,10 @@ class PetriUIConnector:
             ws.setdefault("modo_ia", True)
             ws.setdefault("dot_source", "")
             ws.setdefault("ultima_geracao", "Nenhuma")
-            ws.setdefault("graph_bg_color", "#000000")
+            ws.setdefault("graph_bg_color", "#0e1117")
             ws.setdefault("graph_fg_color", "#ffffff")
             ws.setdefault("graph_rankdir", "LR")
-            ws.setdefault("diagram_scale", 1.35)
+            ws.setdefault("diagram_scale", 3.0)  # Padrão de 300%
             ws.setdefault("diagram_box_height", 640)
             ws.setdefault("llm_model", "")
             ws.setdefault("llm_last_output", "")
@@ -180,13 +189,10 @@ class PetriUIConnector:
         return "0.06", "0.6"
 
     def _retheme_dot_source(self, dot_source: str, bg_color: str, fg_color: str, rankdir: str) -> str:
-        """Apply colors and orientation to existing DOT source."""
         if not dot_source:
             return dot_source
 
         updated = dot_source
-        # Atualiza atributos de forma isolada para nao confundir `color` com
-        # os sufixos de `bgcolor`, `fontcolor` e `fillcolor`.
         updated = re.sub(r'\bbgcolor="[^"]*"', f'bgcolor="{bg_color}"', updated)
         updated = re.sub(r'\bfontcolor="[^"]*"', f'fontcolor="{fg_color}"', updated)
         updated = re.sub(r'\bfillcolor="[^"]*"', f'fillcolor="{fg_color}"', updated)
@@ -196,7 +202,6 @@ class PetriUIConnector:
         else:
             updated = updated.replace("{", "{\n\trankdir=" + rankdir, 1)
 
-        # Rotate transition bars by orientation even for already-generated DOT.
         trans_w, trans_h = self._transition_dimensions(rankdir)
         lines: list[str] = []
         for line in updated.splitlines():
@@ -214,10 +219,9 @@ class PetriUIConnector:
         return updated
 
     def _scaled_dot_source(self, dot_source: str, scale: float) -> str:
-        """Apply proportional zoom for graph rendering without mutating persisted DOT."""
         if not dot_source or abs(scale - 1.0) < 1e-6:
             return dot_source
-        s = max(0.5, min(scale, 2.5))
+        s = max(0.5, min(scale, 5.0))
 
         def _scale_attr(match: re.Match[str]) -> str:
             key = match.group(1)
@@ -249,7 +253,7 @@ class PetriUIConnector:
 
     def new_thread(self) -> None:
         ws = self._workspace_state()
-        ws["graph_bg_color"] = self.config.get("graph_bg_color", ws.get("graph_bg_color", "#000000"))
+        ws["graph_bg_color"] = self.config.get("graph_bg_color", ws.get("graph_bg_color", "#0e1117"))
         ws["graph_fg_color"] = self.config.get("graph_fg_color", ws.get("graph_fg_color", "#ffffff"))
         ws["chat_history"] = []
         ws["llm_last_output"] = ""
@@ -258,13 +262,6 @@ class PetriUIConnector:
         ws = self._workspace_state()
         ws["dot_source"] = ""
         ws["ultima_geracao"] = "Nenhuma"
-
-    def render_sidebar_token_usage(self) -> None:
-        ws = self._workspace_state()
-        with st.expander("Session Status", expanded=False):
-            st.write(f"Mensagens: {len(ws['chat_history'])}")
-            st.write(f"Modelo: {ws.get('llm_model') or 'meta-llama/llama-4-maverick-17b-128e-instruct'}")
-            st.write(f"Ultima geracao: {ws.get('ultima_geracao', 'Nenhuma')}")
 
     def _parse_dot_to_flow(self, dot_source: str) -> tuple[list[FlowNodeModel], list[FlowEdgeModel]]:
         if not dot_source:
@@ -373,7 +370,6 @@ class PetriUIConnector:
         )
 
     def _dot_to_png_bytes(self, dot_source: str) -> bytes:
-        """Render DOT as PNG bytes. Fallback to QuickChart when local Graphviz is unavailable."""
         try:
             return graphviz.Source(dot_source).pipe(format="png")
         except Exception:
@@ -404,14 +400,19 @@ class PetriUIConnector:
 
     def display_chat(self) -> None:
         ws = self._workspace_state()
-        ws["graph_bg_color"] = self.config.get("graph_bg_color", ws.get("graph_bg_color", "#000000"))
-        ws["graph_fg_color"] = self.config.get("graph_fg_color", ws.get("graph_fg_color", "#ffffff"))
-        ws["graph_rankdir"] = self.config.get("graph_rankdir", ws.get("graph_rankdir", "LR"))
-        if float(ws.get("diagram_scale", 1.0)) <= 1.0:
-            ws["diagram_scale"] = 1.35
+        
+        ws.setdefault("graph_bg_color", "#0e1117")
+        ws.setdefault("graph_fg_color", "#ffffff")
+        ws.setdefault("graph_rankdir", "LR")
+        
+        # Garante fallback em 300% (3.0)
+        if float(ws.get("diagram_scale", 3.0)) < 0.5:
+            ws["diagram_scale"] = 3.0
+            
         if int(ws.get("diagram_box_height", 520)) < 640:
             ws["diagram_box_height"] = 640
         ws.setdefault("dot_theme_applied", (ws["graph_bg_color"], ws["graph_fg_color"], ws["graph_rankdir"]))
+        
         if ws.get("dot_source") and ws["dot_theme_applied"] != (
             ws["graph_bg_color"],
             ws["graph_fg_color"],
@@ -425,18 +426,90 @@ class PetriUIConnector:
             )
             ws["dot_theme_applied"] = (ws["graph_bg_color"], ws["graph_fg_color"], ws["graph_rankdir"])
 
+        # Carregamento do Logo e Definição do Header Estilizado
+        logo_base64 = self._img_to_base64("assets/logo.png")
+        img_tag = f'<img src="{logo_base64}" width="40" style="margin-right: 15px; vertical-align: middle;">' if logo_base64 else ""
+
         st.markdown(
-            """
-            <div class="canvas-topbar">
-              <div class="canvas-eyebrow">SED Workspace</div>
-              <h1 class="canvas-title">Modelagem em Canvas</h1>
-              <p class="canvas-subtitle">
-                Arquitetura pronta para evoluir para Canvas Infinito com estado persistente por workspace.
-              </p>
+            f"""
+            <style>
+            .header-estilizado {{
+                display: flex;
+                align-items: center;
+                padding: 10px 12px;
+                margin-bottom: 10px;
+                border: 1px solid rgba(255, 255, 255, 0.16);
+                border-radius: 10px;
+                background: transparent;
+                font-size: 1.4rem;
+                font-weight: 700;
+                color: #ffffff;
+            }}
+            .canvas-subtitle {{
+                margin: -5px 0 10px 12px;
+                color: rgba(255, 255, 255, 0.82);
+                font-size: 0.9rem;
+            }}
+            
+            .chat-scroll-box {{
+                max-height: 38vh;
+                overflow-y: auto;
+                padding-right: 6px;
+                margin-bottom: 8px;
+            }}
+            .chat-scroll-box::-webkit-scrollbar {{
+                width: 6px;
+            }}
+            .chat-scroll-box::-webkit-scrollbar-track {{
+                background: rgba(255,255,255,0.05);
+                border-radius: 4px;
+            }}
+            .chat-scroll-box::-webkit-scrollbar-thumb {{
+                background: rgba(255,255,255,0.2);
+                border-radius: 4px;
+            }}
+            .chat-scroll-box::-webkit-scrollbar-thumb:hover {{
+                background: rgba(255,255,255,0.3);
+            }}
+            </style>
+            
+            <div class="header-estilizado">
+                {img_tag} SED Workspace
             </div>
+            <p class="canvas-subtitle">
+                Arquitetura pronta para evoluir para Canvas Infinito com estado persistente por workspace.
+            </p>
             """,
             unsafe_allow_html=True,
         )
+
+        with st.expander("⚙️ Configurações Visuais do Diagrama (DOT)", expanded=False):
+            c_bg, c_fg, c_ori = st.columns(3)
+            with c_bg:
+                new_bg = st.color_picker("Fundo DOT", value=ws["graph_bg_color"], key="ui_cfg_bg")
+            with c_fg:
+                new_fg = st.color_picker("Desenho DOT", value=ws["graph_fg_color"], key="ui_cfg_fg")
+            with c_ori:
+                ori_opts = {"Horizontal": "LR", "Vertical": "TB"}
+                curr_lbl = "Vertical" if ws["graph_rankdir"] == "TB" else "Horizontal"
+                new_lbl = st.selectbox(
+                    "Orientação",
+                    options=list(ori_opts.keys()),
+                    index=list(ori_opts.keys()).index(curr_lbl),
+                    key="ui_cfg_ori"
+                )
+                new_rank = ori_opts[new_lbl]
+            
+            if new_bg != ws["graph_bg_color"] or new_fg != ws["graph_fg_color"] or new_rank != ws["graph_rankdir"]:
+                ws["graph_bg_color"] = new_bg
+                ws["graph_fg_color"] = new_fg
+                ws["graph_rankdir"] = new_rank
+                if ws.get("dot_source"):
+                    ws["dot_source"] = self._retheme_dot_source(
+                        ws["dot_source"], bg_color=new_bg, fg_color=new_fg, rankdir=new_rank
+                    )
+                    ws["dot_theme_applied"] = (new_bg, new_fg, new_rank)
+                st.rerun()
 
         with st.sidebar:
             st.markdown("### Painel de Modelagem")
@@ -448,20 +521,18 @@ class PetriUIConnector:
             )
             ws["modo_ia"] = modo_ia
             st.caption("Modo ativo: Automático (IA)" if modo_ia else "Modo ativo: Manual (automático desligado)")
-            orientation_label = "Horizontal" if ws["graph_rankdir"] == "LR" else "Vertical"
-            st.caption(
-                f"Cores DOT: fundo {ws['graph_bg_color']} | desenho {ws['graph_fg_color']} | orientacao {orientation_label}"
-            )
-            st.divider()
-
+            
             if modo_ia:
-                if st.button("New Chat", width="stretch"):
-                    self.new_thread()
-            if st.button("Clear Graph", width="stretch"):
-                self.clear_graph()
-            if modo_ia:
-                self.render_sidebar_token_usage()
-            st.divider()
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if st.button("New Chat", use_container_width=True):
+                        self.new_thread()
+                with col_btn2:
+                    if st.button("Clear Graph", use_container_width=True):
+                        self.clear_graph()
+            else:
+                if st.button("Clear Graph", use_container_width=True):
+                    self.clear_graph()
 
             if modo_ia:
                 if st.session_state.get("clear_side_chat_prompt", False):
@@ -492,8 +563,9 @@ class PetriUIConnector:
                                     "</div>"
                                 )
                             )
+                    
                     chat_html = (
-                        '<div style="max-height:280px; overflow-y:auto; padding-right:4px; margin-bottom:6px;">'
+                        '<div class="chat-scroll-box">'
                         + "".join(messages_html)
                         + "</div>"
                     )
@@ -533,10 +605,10 @@ class PetriUIConnector:
                         options=model_options,
                         index=model_options.index(selected_model),
                         key="llm_model_select",
+                        label_visibility="collapsed"
                     )
                 with row_btn:
-                    st.markdown("<div style='height: 1.55rem;'></div>", unsafe_allow_html=True)
-                    send_chat = st.button("↑", width="stretch", key="btn_side_send")
+                    send_chat = st.button("↑", use_container_width=True, key="btn_side_send")
                 ws["llm_model"] = model
 
                 if send_chat and chat_prompt.strip():
@@ -579,7 +651,7 @@ class PetriUIConnector:
 
                 if modo_manual == "Padrão Fixo":
                     st.caption("Topologia padrão fixa: 3 lugares e 2 transições em cadeia.")
-                    if st.button("Gerar Manual", width="stretch", key="btn_manual_fixed"):
+                    if st.button("Gerar Manual", use_container_width=True, key="btn_manual_fixed"):
                         dot = build_petri_net_manual(
                             3,
                             2,
@@ -659,33 +731,36 @@ class PetriUIConnector:
                             )
                             ws["manual"]["tokens"][place_id] = tokens
 
-                    if st.button("Gerar Manual", width="stretch", key="btn_manual_custom"):
-                        dot = build_petri_net_manual_conexoes(
-                            n_lugares,
-                            n_transicoes,
-                            conexoes_list,
-                            tokens_por_lugar=ws["manual"]["tokens"],
-                            bg_color=ws["graph_bg_color"],
-                            fg_color=ws["graph_fg_color"],
-                            rankdir=ws["graph_rankdir"],
-                        )
-                        ws["dot_source"] = dot.source
-                        ws["dot_theme_applied"] = (ws["graph_bg_color"], ws["graph_fg_color"], ws["graph_rankdir"])
-                        ws["ultima_geracao"] = "Manual (Personalizado)"
-                        st.success("Grafo manual personalizado gerado.")
+                if st.button("Gerar Manual", use_container_width=True, key="btn_manual_custom"):
+                    dot = build_petri_net_manual_conexoes(
+                        n_lugares,
+                        n_transicoes,
+                        conexoes_list,
+                        tokens_por_lugar=ws["manual"]["tokens"],
+                        bg_color=ws["graph_bg_color"],
+                        fg_color=ws["graph_fg_color"],
+                        rankdir=ws["graph_rankdir"],
+                    )
+                    ws["dot_source"] = dot.source
+                    ws["dot_theme_applied"] = (ws["graph_bg_color"], ws["graph_fg_color"], ws["graph_rankdir"])
+                    ws["ultima_geracao"] = "Manual (Personalizado)"
+                    st.success("Grafo manual personalizado gerado.")
 
         with st.container():
             mode_label = "IA" if ws["modo_ia"] else "Manual"
             with st.container(border=True):
-                ctrl_l, ctrl_c, ctrl_r = st.columns([0.15, 0.7, 0.15], gap="small")
-                with ctrl_l:
-                    if st.button("−", key="zoom_out_btn", width="stretch"):
-                        ws["diagram_scale"] = max(0.5, round(float(ws.get("diagram_scale", 1.0)) - 0.1, 2))
-                with ctrl_c:
-                    st.caption(f"Zoom do diagrama: {int(float(ws.get('diagram_scale', 1.0)) * 100)}%")
-                with ctrl_r:
-                    if st.button("+", key="zoom_in_btn", width="stretch"):
-                        ws["diagram_scale"] = min(2.5, round(float(ws.get("diagram_scale", 1.0)) + 0.1, 2))
+                
+                # NOVO SLIDER DE ZOOM
+                zoom_val = int(float(ws.get('diagram_scale', 3.0)) * 100)
+                zoom_pct = st.slider(
+                    "🔍 Zoom do Diagrama (%)", 
+                    min_value=50, 
+                    max_value=800, 
+                    value=zoom_val, 
+                    step=25,
+                    help="Ajuste o nível de zoom do grafo gerado."
+                )
+                ws["diagram_scale"] = zoom_pct / 100.0
 
                 st.markdown(
                     f"""
@@ -695,17 +770,33 @@ class PetriUIConnector:
                     unsafe_allow_html=True,
                 )
                 box_h = int(ws.get("diagram_box_height", 520))
+                
+                # CSS PARA CENTRALIZAÇÃO PERFEITA
                 st.markdown(
-                    f"<style>div[data-testid='stGraphvizChart']{{min-height:{box_h}px;}}</style>",
+                    f"""
+                    <style>
+                    div[data-testid='stGraphvizChart'] {{
+                        min-height: {box_h}px;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        overflow: auto;
+                        width: 100%;
+                    }}
+                    div[data-testid='stGraphvizChart'] svg {{
+                        margin: auto;
+                    }}
+                    </style>
+                    """,
                     unsafe_allow_html=True,
                 )
 
                 if ws["dot_source"]:
                     try:
                         dot_to_render = self._scaled_dot_source(
-                            ws["dot_source"], float(ws.get("diagram_scale", 1.0))
+                            ws["dot_source"], float(ws.get("diagram_scale", 3.0))
                         )
-                        st.graphviz_chart(dot_to_render, width="stretch")
+                        st.graphviz_chart(dot_to_render, use_container_width=False)
                     except Exception:
                         st.error("Graphviz nao disponivel no ambiente. Exibindo DOT.")
                         st.code(ws["dot_source"], language="dot")
@@ -717,7 +808,6 @@ class PetriUIConnector:
                             data=png_bytes,
                             file_name="rede_petri.png",
                             mime="image/png",
-                            width="content",
                             key="download_petri_png",
                         )
                     except Exception:
@@ -740,14 +830,14 @@ class PetriUIConnector:
                         unsafe_allow_html=True,
                     )
 
-                if ws.get("llm_last_output"):
-                    with st.expander("Ultima saida do LLM", expanded=False):
-                        st.write(ws["llm_last_output"])
-                if ws.get("last_raw_model_output"):
-                    with st.expander("Raw retorno do modelo", expanded=False):
-                        st.code(ws["last_raw_model_output"], language="json")
-                if ws.get("last_petri_spec"):
-                    with st.expander("JSON validado (neuro-simbolico)", expanded=False):
-                        st.json(ws["last_petri_spec"])
+        if ws.get("llm_last_output"):
+            with st.expander("Ultima saida do LLM", expanded=False):
+                st.write(ws["llm_last_output"])
+        if ws.get("last_raw_model_output"):
+            with st.expander("Raw retorno do modelo", expanded=False):
+                st.code(ws["last_raw_model_output"], language="json")
+        if ws.get("last_petri_spec"):
+            with st.expander("JSON validado (neuro-simbolico)", expanded=False):
+                st.json(ws["last_petri_spec"])
 
         self._render_float_panel(ws)
